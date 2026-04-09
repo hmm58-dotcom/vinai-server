@@ -211,6 +211,59 @@ Be thorough but realistic. If you cannot clearly see damage, note what's visible
   }
 });
 
+// ── Maintenance Schedule ──
+app.post('/api/maintenance', checkAppSecret, async (req, res) => {
+  try {
+    const { vehicle, mileage } = req.body;
+    if (!vehicle || !mileage) return res.status(400).json({ error: 'Vehicle and mileage are required' });
+
+    const vehicleInfo = `${vehicle.year} ${vehicle.make} ${vehicle.model} ${vehicle.trim} (engine: ${vehicle.engine}${vehicle.fuel_type ? ', ' + vehicle.fuel_type : ''})`;
+    const currentMileage = parseInt(mileage);
+
+    const prompt = `You are an expert automotive maintenance advisor. Vehicle: ${vehicleInfo}. Current mileage: ${currentMileage.toLocaleString()} miles.
+
+Based on the manufacturer's recommended maintenance schedule for this EXACT vehicle (accounting for engine type, fuel type, and drivetrain), generate a complete maintenance schedule.
+
+CRITICAL: If this is a DIESEL vehicle, include diesel-specific maintenance like DEF fluid, fuel filter changes (more frequent than gas), diesel exhaust fluid, glow plug inspection, turbo maintenance, etc. If GASOLINE, use standard gas engine intervals.
+
+Return ONLY valid JSON (no markdown, no backticks):
+{
+  "vehicle_summary": "one line confirming the vehicle",
+  "current_mileage": ${currentMileage},
+  "items": [
+    {
+      "service": "name of service (e.g. Oil & Filter Change)",
+      "interval_miles": 5000,
+      "interval_months": 6,
+      "last_due_miles": nearest past interval milestone,
+      "next_due_miles": next upcoming interval milestone,
+      "miles_remaining": how many miles until next due (negative if overdue),
+      "status": "overdue" | "due_soon" | "good",
+      "urgency": 1-10 (10 = most urgent),
+      "estimated_cost": "$XX - $XX",
+      "diy_difficulty": "Easy" | "Moderate" | "Advanced" | "Pro Only",
+      "description": "brief explanation of why this matters",
+      "category": "Engine" | "Transmission" | "Brakes" | "Fluids" | "Filters" | "Tires" | "Electrical" | "Suspension" | "Exhaust" | "Other"
+    }
+  ],
+  "health_tips": ["2-3 tips specific to this vehicle at this mileage"]
+}
+
+Include 12-18 maintenance items covering all major systems. Sort by urgency (most urgent first). Mark items as:
+- "overdue" if current mileage has passed the next due milestone
+- "due_soon" if within 3,000 miles or 2 months of next service
+- "good" if not due yet
+
+Be accurate to THIS specific vehicle's manufacturer recommendations, not generic intervals.`;
+
+    const data = await callClaude(prompt, 3000);
+    res.json(parseJSON(data));
+  } catch (e) {
+    console.error('maintenance error:', e.message);
+    res.status(500).json({ error: 'Failed to generate maintenance schedule' });
+  }
+});
+
 // ── Claude API helpers ──
 function callClaude(prompt, maxTokens) {
   const messages = [{ role: 'user', content: prompt }];
