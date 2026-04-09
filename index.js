@@ -44,10 +44,20 @@ app.post('/api/decode-vin', checkAppSecret, async (req, res) => {
     const { vin } = req.body;
     if (!vin) return res.status(400).json({ error: 'VIN is required' });
 
-    const prompt = `Decode this VIN and return ONLY valid JSON, no markdown or backticks.
+    const prompt = `You are an expert VIN decoder. Decode this VIN character by character using official NHTSA VIN decoding standards.
+
 VIN: ${vin}
 
-Return: {"year":"","make":"","model":"","trim":"","engine":"engine description with displacement and cylinders"}
+CRITICAL: Pay close attention to the 8th character (engine code) to correctly identify:
+- Fuel type: Gasoline, Diesel, Hybrid, Electric, Flex Fuel
+- Engine displacement (e.g. 6.7L, 5.0L, 3.5L)
+- Engine configuration (V8, V6, I4, I6, etc.)
+- Turbo/supercharged if applicable
+
+For trucks (Ford F-150/F-250/F-350, RAM, Silverado, Sierra, etc.), it is ESSENTIAL to distinguish between gas and diesel engines. Many trucks have both gas and diesel options — get this right by analyzing the VIN engine code character.
+
+Return ONLY valid JSON, no markdown or backticks:
+{"year":"","make":"","model":"","trim":"","engine":"displacement + configuration + fuel type (e.g. 6.7L V8 Turbo Diesel, 5.0L V8 Gasoline, 3.5L V6 EcoBoost Gasoline)","fuel_type":"Gasoline|Diesel|Hybrid|Electric|Flex Fuel"}
 
 If invalid return: {"error":"Could not decode this VIN"}`;
 
@@ -64,6 +74,7 @@ If invalid return: {"error":"Could not decode this VIN"}`;
       model: parsed.model,
       trim: parsed.trim || 'Base',
       engine: parsed.engine || 'Standard',
+      fuel_type: parsed.fuel_type || 'Gasoline',
     });
   } catch (e) {
     console.error('decode-vin error:', e.message, e.stack);
