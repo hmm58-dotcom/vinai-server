@@ -3,7 +3,13 @@ const cors = require('cors');
 const https = require('https');
 
 // ── Load env vars (works locally without dotenv on Railway/Render) ──
-try { require('dotenv').config({ override: true }); } catch (_) {}
+// Load .env file for local dev (Render/Railway set env vars natively)
+try {
+  const fs = require('fs');
+  if (fs.existsSync('.env')) {
+    require('dotenv').config({ override: true });
+  }
+} catch (_) {}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
