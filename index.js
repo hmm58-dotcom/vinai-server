@@ -95,6 +95,7 @@ Return ONLY valid JSON (no markdown, no backticks, no explanation):
   "parts": [
     {
       "part_name": "specific part name",
+      "part_number": "exact manufacturer part number (e.g. Wagner QC1400, Motorcraft FA-1927, Bosch 9617, ACDelco 41-110)",
       "brand": "brand name",
       "tier": "OEM" | "Aftermarket Premium" | "Aftermarket Budget" | "Value",
       "estimated_price_range": "$XX - $XX",
@@ -113,7 +114,9 @@ Return ONLY valid JSON (no markdown, no backticks, no explanation):
   "part_location_description": "where this part sits on the vehicle"
 }
 
-Provide 3-4 options mixing OEM, aftermarket premium, and budget tiers. For where_to_get, ONLY recommend: eBay, Car-Part.com (for used/salvage OEM parts), or Amazon. Factor in safety criticality, price differences, and lead times. Be specific to this exact trim and engine.`;
+CRITICAL: You MUST include a real, accurate part_number for every part. Use the actual manufacturer/brand part number that someone could search on Amazon, AutoZone, or eBay to find the exact product. Do NOT make up part numbers — use real ones.
+
+Provide 3-4 options mixing OEM, aftermarket premium, and budget tiers. Factor in safety criticality, price differences, and lead times. Be specific to this exact trim and engine.`;
 
     const data = await callClaude(prompt, 1500);
     res.json(parseJSON(data));
