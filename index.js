@@ -281,41 +281,46 @@ app.post('/api/maintenance', checkAppSecret, async (req, res) => {
     const vehicleInfo = `${vehicle.year} ${vehicle.make} ${vehicle.model} ${vehicle.trim} (engine: ${vehicle.engine}${vehicle.fuel_type ? ', ' + vehicle.fuel_type : ''})`;
     const currentMileage = parseInt(mileage);
 
-    const prompt = `You are an expert automotive maintenance advisor. Vehicle: ${vehicleInfo}. Current mileage: ${currentMileage.toLocaleString()} miles.
+    const prompt = `You are an expert automotive maintenance advisor with access to manufacturer service manuals. Vehicle: ${vehicleInfo}. Current mileage: ${currentMileage.toLocaleString()} miles.
 
-Based on the manufacturer's recommended maintenance schedule for this EXACT vehicle (accounting for engine type, fuel type, and drivetrain), generate a complete maintenance schedule.
-
-CRITICAL: If this is a DIESEL vehicle, include diesel-specific maintenance like DEF fluid, fuel filter changes (more frequent than gas), diesel exhaust fluid, glow plug inspection, turbo maintenance, etc. If GASOLINE, use standard gas engine intervals.
+IMPORTANT INSTRUCTIONS:
+1. Use the ACTUAL manufacturer-recommended service intervals from ${vehicle.make}'s owner's manual for this EXACT year, model, trim, and engine. Do NOT use generic intervals.
+2. For example: if ${vehicle.make} recommends oil changes every 10,000 miles for this engine, use 10,000 — NOT 5,000 or 3,000.
+3. Calculate "last_due_miles" and "next_due_miles" based on the manufacturer interval. Example: if interval is 10,000 miles and current mileage is 87,000, then last_due is 80,000 and next_due is 90,000.
+4. Be HONEST with statuses. Only mark "overdue" if the current mileage has genuinely passed the next service milestone. Don't inflate urgency to scare users.
+5. If this is a DIESEL vehicle, include diesel-specific items (DEF fluid, fuel filter, glow plugs, turbo, etc.) with their correct diesel intervals.
+6. If this is a GASOLINE vehicle, do NOT include diesel-specific items.
 
 Return ONLY valid JSON (no markdown, no backticks):
 {
-  "vehicle_summary": "one line confirming the vehicle",
+  "vehicle_summary": "${vehicle.year} ${vehicle.make} ${vehicle.model} — ${vehicle.engine}",
   "current_mileage": ${currentMileage},
+  "source": "Based on ${vehicle.make} recommended maintenance schedule",
   "items": [
     {
-      "service": "name of service (e.g. Oil & Filter Change)",
-      "interval_miles": 5000,
-      "interval_months": 6,
-      "last_due_miles": nearest past interval milestone,
-      "next_due_miles": next upcoming interval milestone,
-      "miles_remaining": how many miles until next due (negative if overdue),
+      "service": "name of service",
+      "interval_miles": manufacturer recommended interval in miles,
+      "interval_months": manufacturer recommended interval in months,
+      "last_due_miles": last milestone this was due,
+      "next_due_miles": next milestone this is due,
+      "miles_remaining": next_due_miles minus current mileage (negative if overdue),
       "status": "overdue" | "due_soon" | "good",
-      "urgency": 1-10 (10 = most urgent),
-      "estimated_cost": "$XX - $XX",
+      "urgency": 1-10,
+      "estimated_cost": "$XX - $XX (parts + labor at a shop)",
       "diy_difficulty": "Easy" | "Moderate" | "Advanced" | "Pro Only",
-      "description": "brief explanation of why this matters",
+      "description": "why this service matters for THIS specific vehicle",
       "category": "Engine" | "Transmission" | "Brakes" | "Fluids" | "Filters" | "Tires" | "Electrical" | "Suspension" | "Exhaust" | "Other"
     }
   ],
-  "health_tips": ["2-3 tips specific to this vehicle at this mileage"]
+  "health_tips": ["2-3 actionable tips specific to a ${vehicle.year} ${vehicle.make} ${vehicle.model} at ${currentMileage.toLocaleString()} miles"]
 }
 
-Include 12-18 maintenance items covering all major systems. Sort by urgency (most urgent first). Mark items as:
-- "overdue" if current mileage has passed the next due milestone
-- "due_soon" if within 3,000 miles or 2 months of next service
+Include 12-18 items. Sort by urgency (most urgent first). Mark items as:
+- "overdue" ONLY if current mileage has passed the next_due_miles
+- "due_soon" if within 3,000 miles of next service
 - "good" if not due yet
 
-Be accurate to THIS specific vehicle's manufacturer recommendations, not generic intervals.`;
+ACCURACY IS CRITICAL. Users will compare this against their owner's manual. If intervals are wrong, they will not trust the app.`;
 
     const data = await callClaude(prompt, 3000);
     res.json(parseJSON(data));
