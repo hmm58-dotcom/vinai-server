@@ -264,6 +264,51 @@ Be accurate to THIS specific vehicle's manufacturer recommendations, not generic
   }
 });
 
+// ── Diagnose Symptom ──
+app.post('/api/diagnose', checkAppSecret, async (req, res) => {
+  try {
+    const { vehicle, symptom } = req.body;
+    if (!vehicle || !symptom) return res.status(400).json({ error: 'Vehicle and symptom are required' });
+
+    const vehicleInfo = `${vehicle.year} ${vehicle.make} ${vehicle.model} ${vehicle.trim} (engine: ${vehicle.engine}${vehicle.fuel_type ? ', ' + vehicle.fuel_type : ''})`;
+
+    const prompt = `You are an expert automotive diagnostician. Vehicle: ${vehicleInfo}. The owner reports: "${symptom}".
+
+Based on this EXACT vehicle and the described symptom, diagnose the most likely causes.
+
+Return ONLY valid JSON (no markdown, no backticks):
+{
+  "symptom_summary": "restated symptom in technical terms",
+  "urgency": "Low" | "Medium" | "High" | "Critical",
+  "urgency_score": 1-10,
+  "driveable": true | false,
+  "causes": [
+    {
+      "cause": "name of the likely cause",
+      "likelihood": "Very Likely" | "Likely" | "Possible",
+      "explanation": "2-3 sentences on why this happens on this specific vehicle",
+      "parts_needed": ["list of parts that may need replacing"],
+      "estimated_repair_cost": "$XX - $XX",
+      "diy_difficulty": "Easy" | "Moderate" | "Advanced" | "Pro Only",
+      "diy_possible": true | false,
+      "time_estimate": "e.g. 1-2 hours",
+      "what_happens_if_ignored": "consequence of not fixing"
+    }
+  ],
+  "quick_checks": ["things the owner can check right now at home"],
+  "recommendation": "2-3 sentences of overall advice for this specific situation"
+}
+
+Provide 3-5 causes ordered by likelihood (most likely first). Be specific to THIS vehicle — mention known common issues for this year/make/model if applicable. Be honest about DIY feasibility.`;
+
+    const data = await callClaude(prompt, 2500);
+    res.json(parseJSON(data));
+  } catch (e) {
+    console.error('diagnose error:', e.message);
+    res.status(500).json({ error: 'Failed to diagnose symptom' });
+  }
+});
+
 // ── Claude API helpers ──
 function callClaude(prompt, maxTokens) {
   const messages = [{ role: 'user', content: prompt }];
