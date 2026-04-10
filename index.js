@@ -381,7 +381,7 @@ function callClaude(prompt, maxTokens) {
   return callClaudeRaw(messages, maxTokens);
 }
 
-function callClaudeRaw(messages, maxTokens) {
+function callClaudeRaw(messages, maxTokens, retries = 3) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({
       model: MODEL,
@@ -405,6 +405,14 @@ function callClaudeRaw(messages, maxTokens) {
       let data = '';
       res.on('data', (chunk) => data += chunk);
       res.on('end', () => {
+        // Retry on overloaded (529) or server errors (500+)
+        if ((res.statusCode === 529 || res.statusCode >= 500) && retries > 0) {
+          const delay = (4 - retries) * 2000; // 2s, 4s, 6s
+          setTimeout(() => {
+            callClaudeRaw(messages, maxTokens, retries - 1).then(resolve).catch(reject);
+          }, delay);
+          return;
+        }
         if (res.statusCode !== 200) {
           return reject(new Error(`Anthropic API error ${res.statusCode}: ${data}`));
         }
