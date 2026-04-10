@@ -366,6 +366,11 @@ function parseJSON(text) {
   return JSON.parse(cleaned);
 }
 
+// ── Keep-alive ping (prevents Render free tier from sleeping) ──
+setInterval(() => {
+  https.get('https://vinai-server.onrender.com/health', () => {});
+}, 14 * 60 * 1000); // ping every 14 minutes
+
 // ── Start server ──
 app.listen(PORT, () => {
   console.log(`VIN AI server running on port ${PORT}`);
