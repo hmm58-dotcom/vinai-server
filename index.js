@@ -38,26 +38,84 @@ function checkAppSecret(req, res, next) {
   next();
 }
 
+// ── NHTSA VIN Decoder (free, accurate, government data) ──
+function decodeVinNHTSA(vin) {
+  return new Promise((resolve, reject) => {
+    https.get(`https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/${vin}?format=json`, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          const results = {};
+          const fields = {
+            'Make': 'make',
+            'Model': 'model',
+            'Model Year': 'year',
+            'Trim': 'trim',
+            'Engine Number of Cylinders': 'cylinders',
+            'Displacement (L)': 'displacement',
+            'Fuel Type - Primary': 'fuel_type',
+            'Drive Type': 'drive_type',
+            'Body Class': 'body_class',
+            'Vehicle Type': 'vehicle_type',
+            'Turbo': 'turbo',
+            'Engine Model': 'engine_model',
+          };
+          parsed.Results?.forEach(r => {
+            if (fields[r.Variable] && r.Value && r.Value.trim()) {
+              results[fields[r.Variable]] = r.Value.trim();
+            }
+          });
+          resolve(results);
+        } catch (e) {
+          reject(new Error('Failed to parse NHTSA response'));
+        }
+      });
+    }).on('error', reject);
+  });
+}
+
 // ── Decode VIN ──
 app.post('/api/decode-vin', checkAppSecret, async (req, res) => {
   try {
     const { vin } = req.body;
     if (!vin) return res.status(400).json({ error: 'VIN is required' });
 
-    const prompt = `You are an expert VIN decoder. Decode this VIN character by character using official NHTSA VIN decoding standards.
+    // Step 1: Get OFFICIAL data from NHTSA (free government API)
+    let nhtsa = {};
+    try {
+      nhtsa = await decodeVinNHTSA(vin);
+    } catch (e) {
+      console.error('NHTSA fallback:', e.message);
+    }
 
-VIN: ${vin}
+    // If NHTSA gave us solid data, build the response from it
+    if (nhtsa.make && nhtsa.model && nhtsa.year) {
+      // Build engine string from NHTSA data
+      const displacement = nhtsa.displacement ? `${nhtsa.displacement}L` : '';
+      const cylConfig = nhtsa.cylinders ? (parseInt(nhtsa.cylinders) <= 4 ? `I${nhtsa.cylinders}` : parseInt(nhtsa.cylinders) === 6 ? 'V6' : `V${nhtsa.cylinders}`) : '';
+      const turbo = nhtsa.turbo === 'Yes' ? ' Turbo' : '';
+      const fuelType = nhtsa.fuel_type || 'Gasoline';
+      const engine = `${displacement} ${cylConfig}${turbo} ${fuelType}`.trim();
 
-CRITICAL: Pay close attention to the 8th character (engine code) to correctly identify:
-- Fuel type: Gasoline, Diesel, Hybrid, Electric, Flex Fuel
-- Engine displacement (e.g. 6.7L, 5.0L, 3.5L)
-- Engine configuration (V8, V6, I4, I6, etc.)
-- Turbo/supercharged if applicable
+      return res.json({
+        year: nhtsa.year,
+        make: nhtsa.make.charAt(0).toUpperCase() + nhtsa.make.slice(1).toLowerCase(),
+        model: nhtsa.model,
+        trim: nhtsa.trim || 'Base',
+        engine: engine || 'Standard',
+        fuel_type: fuelType,
+        drive_type: nhtsa.drive_type || '',
+        body_class: nhtsa.body_class || '',
+      });
+    }
 
-For trucks (Ford F-150/F-250/F-350, RAM, Silverado, Sierra, etc.), it is ESSENTIAL to distinguish between gas and diesel engines. Many trucks have both gas and diesel options — get this right by analyzing the VIN engine code character.
+    // Step 2: Fallback to AI if NHTSA doesn't have the data
+    const prompt = `You are an expert VIN decoder. Decode this VIN: ${vin}
 
 Return ONLY valid JSON, no markdown or backticks:
-{"year":"","make":"","model":"","trim":"","engine":"displacement + configuration + fuel type (e.g. 6.7L V8 Turbo Diesel, 5.0L V8 Gasoline, 3.5L V6 EcoBoost Gasoline)","fuel_type":"Gasoline|Diesel|Hybrid|Electric|Flex Fuel"}
+{"year":"","make":"","model":"","trim":"","engine":"displacement + configuration + fuel type","fuel_type":"Gasoline|Diesel|Hybrid|Electric|Flex Fuel"}
 
 If invalid return: {"error":"Could not decode this VIN"}`;
 
